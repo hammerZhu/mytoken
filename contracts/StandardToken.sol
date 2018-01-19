@@ -19,6 +19,7 @@ contract StandardToken is Token {
         //If your token leaves out totalSupply and can issue more tokens as time goes on, you need to check if it doesn't wrap.
         //Replace the if with this one instead.
         //require(balances[msg.sender] >= _value && balances[_to] + _value > balances[_to]);
+        require(unlockAccounts[msg.sender]);
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
         balances[_to] += _value;
@@ -29,6 +30,7 @@ contract StandardToken is Token {
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
         //same as above. Replace this line with the following if you want to protect against wrapping uints.
         //require(balances[_from] >= _value && allowed[_from][msg.sender] >= _value && balances[_to] + _value > balances[_to]);
+        require(unlockAccounts[_from]);
         uint256 allowance = allowed[_from][msg.sender];
         require(balances[_from] >= _value && allowance >= _value);
         balances[_to] += _value;
@@ -40,8 +42,8 @@ contract StandardToken is Token {
         return true;
     }
 
-    function balanceOf(address _owner) constant public returns (uint256 balance) {
-        return balances[_owner];
+    function balanceOf(address _from) constant public returns (uint256 balance) {
+        return balances[_from];
     }
 
     function approve(address _spender, uint256 _value) public returns (bool success) {
@@ -54,6 +56,14 @@ contract StandardToken is Token {
       return allowed[_owner][_spender];
     }
 
+    //unlock account
+    function unlockAccount(address account,bool value){
+        require(msg.sender==owner);
+        unlockAccounts[account]=value;
+    }
+
+    address owner;
     mapping (address => uint256) balances;
     mapping (address => mapping (address => uint256)) allowed;
+    mapping (address => bool) unlockAccounts;
 }

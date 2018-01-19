@@ -44,12 +44,33 @@ window.App = {
             MetaCoin.deployed().then(function (instance) {
                 metaContract = instance;
                 self.refreshBalance();
+                metaContract.getCrowdFundPrice.call({from: userAccount}).then(function(value){
+                    eth_price=  value;
+                    var eth_per_coin=web3.fromWei(eth_price,'ether');
+                    var coin_per_eth=1/eth_per_coin;
+                    var price_element=document.getElementById("coin_price");
+                    price_element.innerHTML = coin_per_eth.valueOf();
+                });
+
             });
         });
     },
     setStatus: function(message) {
         var status = document.getElementById("status");
         status.innerHTML = message;
+    },
+    changeAccount:function(){
+        var self = this;
+        var amount = document.getElementById("account_address").value;
+        if(web3.isAddress(amount)){
+            userAccount=amount;
+
+            self.refreshBalance();
+        }
+        else{
+            self.setStatus("Amount is not a valid address.");
+        }
+
     },
     refreshBalance: function() {
         var self = this;
@@ -71,18 +92,30 @@ window.App = {
         });
         //更新用户代币
         metaContract.balanceOf.call(userAccount, {from: userAccount}).then(function(value) {
+            var user_address = document.getElementById("user_address");
+            user_address.innerHTML = userAccount.toString();
             var balance_element = document.getElementById("coin_user");
             balance_element.innerHTML = value.valueOf();
         }).catch(function(e) {
             console.log(e);
             self.setStatus("Error getting user account balance; see log.");
         });
+        //更新所有者以太币
+        var owner_eth_value=web3.eth.getBalance(mainAccount);
+        var owner_eth_show=web3.fromWei(owner_eth_value,'finney');
+        var owner_eth_element = document.getElementById("eth_owner");
+        owner_eth_element.innerHTML = owner_eth_show.valueOf();
         //更新合约以太币
 
         var eth_value=web3.eth.getBalance(metaContract.address);
         var eth_show=web3.fromWei(eth_value,'finney');
         var eth_element = document.getElementById("crowd_eth");
         eth_element.innerHTML = eth_show.valueOf();
+        //更新用户以太币
+        var user_eth_value=web3.eth.getBalance(userAccount);
+        var user_eth_show=web3.fromWei(user_eth_value,'finney');
+        var user_eth_element = document.getElementById("user_eth");
+        user_eth_element.innerHTML = user_eth_show.valueOf();
     },
     sendCoin: function() {
         var self = this;
@@ -104,17 +137,44 @@ window.App = {
             self.setStatus("Error sending coin; see log.");
         });
     },
-    startCrowdFund:function(){
-        var self=this;
-        var token_value=parseInt(document.getElementById("crowdFund_amount").value);
-        var token_price=parseInt(document.getElementById("crowdFund_price").value);
-        eth_price=token_price;
-        metaContract.startCrowdFund.sendTransaction(token_value,token_price, {from: mainAccount}).then(function(value) {
-            self.setStatus("Start crowdFund complete!");
+    sendCoinFrom: function() {
+        var self = this;
+
+        var amount = parseInt(document.getElementById("amount").value);
+        var receiver = document.getElementById("receiver").value;
+        var sender = document.getElementById("sender").value;
+        this.setStatus("Initiating transaction... (please wait)");
+
+        var meta;
+        MetaCoin.deployed().then(function(instance) {
+            meta = instance;
+            return meta.transferFrom(sender,receiver, amount, {from: userAccount});
+        }).then(function() {
+            self.setStatus("Transaction complete!");
             self.refreshBalance();
         }).catch(function(e) {
             console.log(e);
-            self.setStatus("Start crowdFund error; see log.");
+            self.setStatus("Error sending coin; see log.");
+        });
+    },
+    approveCoin:function(){
+        var self = this;
+
+        var amount = parseInt(document.getElementById("spend_amount").value);
+        var spender = document.getElementById("spender").value;
+
+        this.setStatus("Initiating approval... (please wait)");
+
+        var meta;
+        MetaCoin.deployed().then(function(instance) {
+            meta = instance;
+            return meta.approve(spender, amount, {from: userAccount});
+        }).then(function() {
+            self.setStatus("Approval complete!");
+            self.refreshBalance();
+        }).catch(function(e) {
+            console.log(e);
+            self.setStatus("Approval Error; see log.");
         });
     },
     stopCrowdFund:function(){
@@ -130,9 +190,8 @@ window.App = {
     },
     buyCoin:function(){
         var self=this;
-        var eth_value=parseInt(document.getElementById("eth_amount").value);
-        var eth_wei=eth_value*eth_price;
-        //var eth_wei=web3.toWei(eth_value,'finney');
+        var coin_value=parseInt(document.getElementById("eth_amount").value);
+        var eth_wei=coin_value*eth_price;
 
         //使用众筹合约购币
         metaContract.buyCoin({from:userAccount,value:eth_wei}).then(function() {
@@ -142,7 +201,38 @@ window.App = {
             console.log(e);
             self.setStatus("CrowdFund: buy coin error; see log.");
         });
+    },
+    setWhitelist:function(value){
+        var self = this;
+        var amount = document.getElementById("whitelist_address").value;
+        if(!web3.isAddress(amount)){
+
+            self.setStatus("Amount is not a valid address.");
+            return ;
+        }
+        metaContract.setWhiteList.sendTransaction(amount,value, {from: userAccount}).then(function(value) {
+            self.setStatus("Set whitelist  complete!");
+        }).catch(function(e) {
+            console.log(e);
+            self.setStatus("Set whitelist error; see log.");
+        });
+    },
+    freezeAccount:function(value){
+        var self = this;
+        var amount = document.getElementById("freeze_address").value;
+        if(!web3.isAddress(amount)){
+
+            self.setStatus("Amount is not a valid address.");
+            return ;
+        }
+        metaContract.unlockAccount.sendTransaction(amount,value, {from: userAccount}).then(function(value) {
+            self.setStatus("freeze/unfreeze  complete!");
+        }).catch(function(e) {
+            console.log(e);
+            self.setStatus("freeze/unfreeze error; see log.");
+        });
     }
+
 };
 
 window.addEventListener('load', function() {

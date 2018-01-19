@@ -30,32 +30,40 @@ contract HumanStandardToken is StandardToken {
     uint8 public decimals;                //How many decimals to show. ie. There could 1000 base units with 3 decimals. Meaning 0.980 SBX = 980 base units. It's like comparing 1 wei to 1 ether.
     string public symbol;                 //An identifier: eg SBX
     string public version = 'H0.1';       //human 0.1 standard. Just an arbitrary versioning scheme.
-    address _owner;
 
-    uint256 circulation;
-    uint crowdfundRestNum;// the coins of this crowdfund,if its 0 ,there are no crowdfund.
+
+    //uint256 circulation;
+    uint256 crowdfundRestNum;// the coins of this ICO,if its 0 ,there are no crowdfund.
     uint256 pricePerCoin;//num of wei  for a coin
     uint256 ethRaise;
+    uint public deadline;
+
+
+    mapping (address => bool) whiteList;
 
      function HumanStandardToken(
         uint256 _totalAmount,
-        uint256 _initialAmount,
         string _tokenName,
         uint8 _decimalUnits,
-        string _tokenSymbol
+        string _tokenSymbol,
+        uint256 _icoAmount,
+        uint durationInMinutes,
+        uint256 _price
         ) public {
-        require(_initialAmount<=_totalAmount);
-        _owner=msg.sender;
+        require(_icoAmount<=_totalAmount);
+        owner=msg.sender;
         totalSupply = _totalAmount;                          // Update total supply
-        balances[msg.sender] = _initialAmount;               // Give the creator all initial tokens
-        circulation=_initialAmount;
+        balances[msg.sender] = _totalAmount;               // Give the creator all initial tokens
+        //circulation=_initialAmount;
         name = _tokenName;                                   // Set the name for display purposes
         decimals = _decimalUnits;                            // Amount of decimals for display purposes
         symbol = _tokenSymbol;                               // Set the symbol for display purposes
 
-        crowdfundRestNum=0;
-        pricePerCoin=100000000000000;
+        crowdfundRestNum=_icoAmount;
+        deadline=now+durationInMinutes* 1 minutes;
+        pricePerCoin=_price;
         ethRaise=0;
+        unlockAccount(msg.sender,true);
     }
 
     /* Approves and then calls the receiving contract */
@@ -69,41 +77,39 @@ contract HumanStandardToken is StandardToken {
         require(_spender.call(bytes4(bytes32(keccak256("receiveApproval(address,uint256,address,bytes)"))), msg.sender, _value, this, _extraData));
         return true;
     }
-
-    //crowdfund coins
-    function startCrowdFund(uint amount,uint256 price){
-        require(msg.sender==_owner);
-        require(crowdfundRestNum==0);
-        require(circulation+amount<=totalSupply);
-        totalSupply += amount;
-        crowdfundRestNum=amount;
-        pricePerCoin=price;
-        ethRaise=0;
-        CrowdFundCoinEvent(msg.sender,amount);
-    }
+    //stop crowdfund and transfer eth to owner
     function stopCrowdFund(){
-        require(msg.sender==_owner);
+        require(msg.sender==owner);
         // get eth
-        _owner.transfer(ethRaise);
-        //get rest coins
-        balances[msg.sender]+=crowdfundRestNum;
+        owner.transfer(ethRaise);
         crowdfundRestNum=0;
     }
-    function getCrowdFundRest() returns (uint256){
+
+    function  getCrowdFundRest() returns (uint256) {
         return crowdfundRestNum;
     }
-    function crowdFundAvail() returns (bool){
-        if(crowdfundRestNum>0)
-            return true;
-        else
-            return false;
+    function getCrowdFundPrice() returns (uint256) {
+        return pricePerCoin;
     }
+    function getDeadline() returns (uint){
+        return deadline;
+    }
+    //buy coin with eth coin,the account must be in whitelist.
     function buyCoin() payable {
+        require (now<=deadline);
+        require (whiteList[msg.sender]);
         uint tokenNum=msg.value/pricePerCoin;
         require(crowdfundRestNum>=tokenNum);
         crowdfundRestNum -=tokenNum;
+        balances[owner]-=tokenNum;
         balances[msg.sender] += tokenNum;
         ethRaise+=msg.value;
         BuyCoinEvent(msg.sender,tokenNum);
+    }
+
+    //set whitelist
+    function setWhiteList(address account,bool value){
+        require(msg.sender==owner);
+        whiteList[account]=value;
     }
 }
